@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import sys,getopt,got,datetime,codecs
+import sys,getopt,got,datetime,codecs,csv,time
 
 def main(argv):
 
@@ -31,7 +31,8 @@ def main(argv):
 		return
  
 	try:
-		opts, args = getopt.getopt(argv, "", ("username=", "since=", "until=", "querysearch=", "toptweets", "maxtweets="))
+		illness = ''
+		opts, args = getopt.getopt(argv, "", ("illness=", "patients=", "username=", "since=", "until=", "querysearch=", "toptweets", "maxtweets="))
 		
 		tweetCriteria = got.manager.TweetCriteria()
 		
@@ -53,27 +54,46 @@ def main(argv):
 				
 			elif opt == '--maxtweets':
 				tweetCriteria.maxTweets = int(arg)
+
+			elif opt == '--patients':
+				tweetCriteria.patients = arg
+
+			elif opt == '--illness':
+				illness = arg
 				
 		
-		outputFile = codecs.open("output_got.csv", "w+", "utf-8")
-		
-		outputFile.write('username;date;retweets;favorites;text;geo;mentions;hashtags;id;permalink')
-		
-		print 'Searching...\n'
-		
-		def receiveBuffer(tweets):
-			for t in tweets:
-				outputFile.write(('\n%s;%s;%d;%d;"%s";%s;%s;%s;"%s";%s' % (t.username, t.date.strftime("%Y-%m-%d %H:%M"), t.retweets, t.favorites, t.text, t.geo, t.mentions, t.hashtags, t.id, t.permalink)))
-			outputFile.flush();
-			print 'More %d saved on file...\n' % len(tweets)
-		
-		got.manager.TweetManager.getTweets(tweetCriteria, receiveBuffer)
-		
+		inputFile = codecs.open(tweetCriteria.patients, "r", "utf-8")
+		ipatients = got.manager.TweetManager.extractPatients(inputFile)
+		#python Exporter.py --illness depression_comorbid --patients data/depression_comorbid/depression_comorbid.csv --maxtweets 4000
+
+		for usr in ipatients:
+			usrnme = usr['username'][1:-1]
+			outputFile = codecs.open("data/"+illness+"/"+usrnme+".csv", "w+", "utf-8")
+			outputFile.write('username;date;retweets;favorites;text;geo;mentions;hashtags;id;permalink')
+			tweetCriteria.username = usrnme
+			
+			print '\nGetting tweets for - %s' % usrnme
+			
+			def receiveBuffer(tweets):
+				for t in tweets:
+					outputFile.write(('\n%s;%s;%d;%d;"%s";%s;%s;%s;"%s";%s' % (t.username, t.date.strftime("%Y-%m-%d %H:%M:%S"), t.retweets, t.favorites, t.text, t.geo, t.mentions, t.hashtags, t.id, t.permalink)))
+				outputFile.flush();
+				print 'More %d saved on file...\n' % len(tweets)
+			
+			got.manager.TweetManager.getTweets(tweetCriteria, receiveBuffer)
+
+			outputFile.close()
+			print 'Done. Output file generated %s.csv \n' % usrnme
+			print '30 second sleep..\n'
+			time.sleep(30)
+			continue
+
+
 	except arg:
 		print 'Arguments parser error, try -h' + arg
 	finally:
-		outputFile.close()
-		print 'Done. Output file generated "output_got.csv".'
+		print 'Done. Goodbye!'
+		
 
 if __name__ == '__main__':
 	main(sys.argv[1:])

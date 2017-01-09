@@ -6,6 +6,16 @@ class TweetManager:
 	
 	def __init__(self):
 		pass
+
+	@staticmethod
+	def extractPatients(inputFile):
+		diagnosed_users = []
+		for row in inputFile:
+			row = row.split(',')
+			diagnosed_users.append({
+				'username':row[0]
+				})
+		return diagnosed_users[1:]
 		
 	@staticmethod
 	def getTweets(tweetCriteria, receiveBuffer = None, bufferLength = 100):
@@ -51,12 +61,19 @@ class TweetManager:
 				tweet.id = id
 				tweet.permalink = 'https://twitter.com' + permalink
 				tweet.username = usernameTweet
+				#http://blog.ambodi.com/clean-up-and-normalize-tweet-texts/
+				#txt = unicode(txt)
+				txt = txt.encode('ascii', 'ignore')
+				txt = re.sub('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', 'URL', txt)
+				txt = txt.replace('"', "") #replaced quotes in tweet with space because causing problems with CSV file
+				#txt = txt.replace('\',"")
 				tweet.text = txt
 				tweet.date = datetime.datetime.fromtimestamp(dateSec)
 				tweet.retweets = retweets
 				tweet.favorites = favorites
 				tweet.mentions = " ".join(re.compile('(@\\w*)').findall(tweet.text))
 				tweet.hashtags = " ".join(re.compile('(#\\w*)').findall(tweet.text))
+				tweet.hashtags = tweet.hashtags.lower()
 				tweet.geo = geo
 				
 				results.append(tweet)
