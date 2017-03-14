@@ -1,6 +1,64 @@
 # -*- coding: utf-8 -*-
+import sys,getopt,got,datetime,codecs,csv,time,sqlite3
+from dateutil.relativedelta import relativedelta
 
-import sys,getopt,got,datetime,codecs,csv,time
+def create_connection(db_file):
+	try:
+		conn = sqlite3.connect(db_file)
+		return conn
+	except sqlite3.Error as er:
+		print(er)
+ 
+	return None
+
+
+def create_tweet(conn, table, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10):
+	sql = '''INSERT INTO ''' + table + '''_tweets VALUES(?,?,?,?,?,?,?,?,?,?)'''
+
+	try:
+		cur = conn.cursor()
+		val = cur.execute(sql,(p1, p2, p3, p4, p5, p6, p7, p8, p9, p10))
+		conn.commit()
+	except sqlite3.Error as er:
+		print(er)
+
+
+def patientDetails():
+	print "to be implemented"
+	print "use tweepy to get user details, label if advocate keyword in description, label if anxiety mentioned, label if specific bipolar 1 or 2"
+
+
+def getMultipleUsersTweets(ipatients, tweetCriteria, conn):
+
+	for usr in ipatients:
+		usrnme = usr['username']
+		diagnosis_date = datetime.datetime.strptime(usr['date_of_diagnosis'], '%d/%m/%Y %H:%M')
+		tweetCriteria.username = usrnme
+		since = diagnosis_date - relativedelta(years=2)
+		until = diagnosis_date + relativedelta(years=2)
+		tweetCriteria.since = since.strftime('%Y-%m-%d')
+		tweetCriteria.until = until.strftime('%Y-%m-%d')
+
+		print '\nRetrieving tweets from %s to %s for %s (Diagnosis made: %s)' % (since, until, usrnme, diagnosis_date)
+		
+		def receiveBuffer(tweets):
+			for t in tweets:
+				#print "%s %s %s\n" % (t.username, t.date.strftime("%Y-%m-%d %H:%M:%S"), t.text)
+				#print t.username
+				create_tweet(conn, tweetCriteria.illness, t.username, t.date.strftime("%Y-%m-%d %H:%M:%S"), t.retweets, t.favorites, t.text, t.geo, t.mentions, t.hashtags, t.id, t.permalink)
+				
+			print 'More %d tweets saved in database...\n' % len(tweets)
+			time.sleep(3)
+ 
+		got.manager.TweetManager.getTweets(tweetCriteria, receiveBuffer)
+		print "Sleeping for 5 seconds..."
+		time.sleep(5)
+		continue
+
+	print 'Done. Tweets saved. See table: %s_tweets \n' % tweetCriteria.illness
+	conn.close()
+		
+
 
 def main(argv):
 
@@ -10,9 +68,9 @@ def main(argv):
 		
 	if len(argv) == 1 and argv[0] == '-h':
 		print """\nTo use this jar, you can pass the folowing attributes:
-    username: Username of a specific twitter account (without @)
-       since: The lower bound date (yyyy-mm-aa)
-       until: The upper bound date (yyyy-mm-aa)
+	username: Username of a specific twitter account (without @)
+	   since: The lower bound date (yyyy-mm-aa)
+	   until: The upper bound date (yyyy-mm-aa)
  querysearch: A query text to be matched
    maxtweets: The maximum number of tweets to retrieve
 
@@ -31,8 +89,8 @@ def main(argv):
 		return
  
 	try:
-		illness = ''
-		opts, args = getopt.getopt(argv, "", ("illness=", "patients=", "username=", "since=", "until=", "querysearch=", "toptweets", "maxtweets="))
+		userlist = ''
+		opts, args = getopt.getopt(argv, "", ("other=","illness=", "userList=", "username=", "since=", "until=", "querysearch=", "toptweets", "maxtweets="))
 		
 		tweetCriteria = got.manager.TweetCriteria()
 		
@@ -55,44 +113,36 @@ def main(argv):
 			elif opt == '--maxtweets':
 				tweetCriteria.maxTweets = int(arg)
 
-			elif opt == '--patients':
-				tweetCriteria.patients = arg
+			elif opt == '--userList':
+				userlist = arg
 
 			elif opt == '--illness':
-				illness = arg
+				tweetCriteria.illness = arg
 				
-		
-		inputFile = codecs.open(tweetCriteria.patients, "r", "utf-8")
-		ipatients = got.manager.TweetManager.extractPatients(inputFile)
-		#python Exporter.py --illness depression_comorbid --patients data/depression_comorbid/depression_comorbid.csv --maxtweets 4000
-
-		for usr in ipatients:
-			usrnme = usr['username'][1:-1]
-			outputFile = codecs.open("data/"+illness+"/"+usrnme+".csv", "w+", "utf-8")
+        # get tweets for multiple users from file or run default functionality
+		if userlist != '':
+			inputFile = codecs.open(userlist, "r", "utf-8")
+			ipatients = got.manager.TweetManager.extractPatients(inputFile)
+			conn = create_connection('data/sqlite/patient_tweets_GetoldTweets.sqlite')
+			getMultipleUsersTweets(ipatients, tweetCriteria, conn)
+		else:
+			outputFile = codecs.open("output_got.csv", "w+", "utf-8")
 			outputFile.write('username;date;retweets;favorites;text;geo;mentions;hashtags;id;permalink')
-			tweetCriteria.username = usrnme
-			
-			print '\nGetting tweets for - %s' % usrnme
+			print 'Searching...\n'
 			
 			def receiveBuffer(tweets):
 				for t in tweets:
-					outputFile.write(('\n%s;%s;%d;%d;"%s";%s;%s;%s;"%s";%s' % (t.username, t.date.strftime("%Y-%m-%d %H:%M:%S"), t.retweets, t.favorites, t.text, t.geo, t.mentions, t.hashtags, t.id, t.permalink)))
+					outputFile.write(('\n%s;%s;%d;%d;"%s";%s;%s;%s;"%s";%s' % (t.username, t.date.strftime("%Y-%m-%d %H:%M"), t.retweets, t.favorites, t.text, t.geo, t.mentions, t.hashtags, t.id, t.permalink)))
 				outputFile.flush();
 				print 'More %d saved on file...\n' % len(tweets)
+				time.sleep(5)
 			
 			got.manager.TweetManager.getTweets(tweetCriteria, receiveBuffer)
-
-			outputFile.close()
-			print 'Done. Output file generated %s.csv \n' % usrnme
-			print '30 second sleep..\n'
-			time.sleep(30)
-			continue
-
 
 	except arg:
 		print 'Arguments parser error, try -h' + arg
 	finally:
-		print 'Done. Goodbye!'
+		print 'Goodbye!'
 		
 
 if __name__ == '__main__':

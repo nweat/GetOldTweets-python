@@ -1,20 +1,33 @@
-import urllib,urllib2,json,re,datetime,sys,cookielib
+import urllib,urllib2,json,re,datetime,sys,cookielib,time
 from .. import models
 from pyquery import PyQuery
+
 
 class TweetManager:
 	
 	def __init__(self):
 		pass
 
+
 	@staticmethod
 	def extractPatients(inputFile):
+		"""
+		Extract twitter users from CSV file who made diagnosis statements "I was diagnosed with ..."
+		Can improve by passing custom delimiter
+		"""
 		diagnosed_users = []
 		for row in inputFile:
-			row = row.split(',')
+			row = row.split(';')
 			diagnosed_users.append({
-				'username':row[0]
-				})
+				'username':row[0], 
+				'date_of_diagnosis':row[1],
+				'retweets':row[2],
+				'favorites':row[3],
+				'text':row[4],
+				'geo':row[5],
+				'mentions':row[6],
+				'hashtags':row[7],
+				'link':row[9]})
 		return diagnosed_users[1:]
 		
 	@staticmethod
@@ -32,8 +45,17 @@ class TweetManager:
 
 		while active:
 			json = TweetManager.getJsonReponse(tweetCriteria, refreshCursor, cookieJar)
-			if len(json['items_html'].strip()) == 0:
+			
+			if json == False:
+				#print 'No tweets found for %s' % tweetCriteria.username
+				#active = False
 				break
+				#continue
+
+			if len(json['items_html'].strip()) == 0:
+				if hasattr(tweetCriteria, 'username'):
+					print 'No tweets found for %s. Account could be protected or account does not exist.' % tweetCriteria.username
+					break
 
 			refreshCursor = json['min_position']			
 			tweets = PyQuery(json['items_html'])('div.js-stream-tweet')
@@ -52,6 +74,7 @@ class TweetManager:
 				dateSec = int(tweetPQ("small.time span.js-short-timestamp").attr("data-time"));
 				id = tweetPQ.attr("data-tweet-id");
 				permalink = tweetPQ.attr("data-permalink-path");
+
 				
 				geo = ''
 				geoSpan = tweetPQ('span.Tweet-geo')
@@ -64,7 +87,7 @@ class TweetManager:
 				#http://blog.ambodi.com/clean-up-and-normalize-tweet-texts/
 				#txt = unicode(txt)
 				txt = txt.encode('ascii', 'ignore')
-				txt = re.sub('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', 'URL', txt)
+				#txt = re.sub('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*(),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', 'URL', txt)
 				txt = txt.replace('"', "") #replaced quotes in tweet with space because causing problems with CSV file
 				#txt = txt.replace('\',"")
 				tweet.text = txt
@@ -86,8 +109,11 @@ class TweetManager:
 				if tweetCriteria.maxTweets > 0 and len(results) >= tweetCriteria.maxTweets:
 					active = False
 					break
-					
-		
+
+			#print "Sleeping for 5 seconds..."
+		 	#time.sleep(5)
+			#continue
+				
 		if receiveBuffer and len(resultsAux) > 0:
 			receiveBuffer(resultsAux)
 		
@@ -134,8 +160,8 @@ class TweetManager:
 			jsonResponse = response.read()
 		except:
 			print "Twitter weird response. Try to see on browser: https://twitter.com/search?q=%s&src=typd" % urllib.quote(urlGetData)
-			sys.exit()
-			return
+			#sys.exit()
+			return False
 		
 		dataJson = json.loads(jsonResponse)
 		

@@ -27,6 +27,6 @@ class TweetCriteria:
 		self.topTweets = topTweets
 		return self
 
-	def setPatients(self, patients):
-		self.patients = patients
+	def setIllness(self, illness):
+		self.illness = illness
 		return self
